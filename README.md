@@ -1,2 +1,1 @@
 # bfh
-Brainfuck, in Haskell
