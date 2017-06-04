@@ -1,43 +1,50 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Main where
 
-import Data.Char
+import           Control.Monad.State.Lazy
 
-data Token = TokOp Operator
-           | TokIdent String
-           | TokNum Int
-           | TokSpace
-           deriving (Show, Eq)
+initialCellState = replicate 10 0
 
-data Operator = Plus | Minus | Times | Divide deriving (Show, Eq)
+type CellState = [Int]
 
-operator :: Char -> Operator
-operator c
-  | c == '+' = Plus
-  | c == '-' = Minus
-  | c == '*' = Times
-  | c == '/' = Divide
+data Command = MoveRight
+             | MoveLeft
+             | IncCell
+             | DecCell
+             | PrintCell
+             | InputCell
+             | OpenBracket
+             | CloseBracket
+             deriving (Show, Eq)
 
-opToStr :: Operator -> String
-opToStr Plus   = "+"
-opToStr Minus  = "-"
-opToStr Times  = "*"
-opToStr Divide = "/"
+tokenize :: String -> [Command]
+tokenize [] = []
+tokenize (x:xs)
+  | x == '>' = MoveRight : tokenize xs
+  | x == '<' = MoveLeft : tokenize xs
+  | x == '+' = IncCell: tokenize xs
+  | x == '-' = DecCell : tokenize xs
+  | x == '.' = PrintCell : tokenize xs
+  | x == ',' = InputCell: tokenize xs
+  | x == '[' = OpenBracket : tokenize xs
+  | x == ']' = CloseBracket: tokenize xs
+  | otherwise = tokenize xs
 
-showContent :: Token -> String
-showContent (TokOp op)     = opToStr op
-showContent (TokIdent str) = str
-showContent (TokNum i)     = show i
 
-tokenizeChar :: Char -> Token
-tokenizeChar c
-  | c `elem` "+-*/" = TokOp (operator c)
-  | isDigit c = TokNum (digitToInt c)
-  | isAlpha c = TokIdent [c]
-  | isSpace c = TokSpace
-  | otherwise = error $ "Cannot tokenize " ++ [c]
+-- Sets a specific cell to a value
+setCell :: (Int -> Int) -> CellState -> Int -> CellState
+setCell f cs i
+  | i == 0    = f (head cs) : tail cs
+  | otherwise = take (i - 1) cs ++ [f $ cs !! (i - 1)] ++ drop i cs
 
-tokenize :: String -> [Token]
-tokenize = map tokenizeChar
+parse :: [Command] -> CellState -> Int -> CellState
+parse [] cs _ = cs
+parse (x:xs) cs i
+  | x == MoveRight = parse xs cs (i + 1)
+  | x == MoveLeft = parse xs cs (i - 1)
+  | x == IncCell = parse xs (setCell (+1) cs i) i
+  | x == DecCell = parse xs (setCell (\j -> j - 1) cs i) i
+  | otherwise = cs
 
 main :: IO ()
-main = print $ operator '*'
+main = print $ parse (tokenize "+++++ >> +++++ << -- ") initialCellState 0
