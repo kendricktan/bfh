@@ -3,7 +3,7 @@ module Main where
 
 import           Control.Monad.State.Lazy
 
-initialCellState = replicate 10 0
+initialCellState = replicate 30 0
 
 type CellState = [Int]
 
@@ -33,18 +33,23 @@ tokenize (x:xs)
 
 -- Sets a specific cell to a value
 setCell :: (Int -> Int) -> CellState -> Int -> CellState
-setCell f cs i
-  | i == 0    = f (head cs) : tail cs
-  | otherwise = take (i - 1) cs ++ [f $ cs !! (i - 1)] ++ drop i cs
+setCell f cs i = take (i - 1) cs ++ [f $ cs !! (i - 1)] ++ drop i cs
 
-parse :: [Command] -> CellState -> Int -> CellState
-parse [] cs _ = cs
-parse (x:xs) cs i
-  | x == MoveRight = parse xs cs (i + 1)
-  | x == MoveLeft = parse xs cs (i - 1)
-  | x == IncCell = parse xs (setCell (+1) cs i) i
-  | x == DecCell = parse xs (setCell (\j -> j - 1) cs i) i
-  | otherwise = cs
+-- Parse
+-- (looping stack) -> stack to be executed -> ...
+parse :: [Command] -> [Command] -> CellState -> Int -> CellState
+parse _ [] cs _ = cs
+parse ls (x:xs) cs i
+  | x == MoveRight = parse (ls ++ [x]) xs cs (i + 1)
+  | x == MoveLeft = parse (ls ++ [x]) xs cs (i - 1)
+  | x == IncCell = parse (ls ++ [x]) xs (setCell (+1) cs i) i
+  | x == DecCell = parse (ls ++ [x]) xs (setCell (\j -> j - 1) cs i) i
+  | x == OpenBracket = parse [] xs cs i
+  | x == CloseBracket = if (cs !! (i - 1)) > 0
+                           then parse [] (ls ++ [x] ++ xs) cs i
+                           else parse [] xs cs i
+  | otherwise = parse ls xs cs i
+
 
 main :: IO ()
-main = print $ parse (tokenize "+++++ >> +++++ << -- ") initialCellState 0
+main = print $ parse [] (tokenize "+++++ [> +++++ < -]") initialCellState 1
