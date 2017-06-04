@@ -33,23 +33,28 @@ tokenize (x:xs)
 
 -- Sets a specific cell to a value
 setCell :: (Int -> Int) -> CellState -> Int -> CellState
-setCell f cs i = take (i - 1) cs ++ [f $ cs !! (i - 1)] ++ drop i cs
+setCell f cs i = take i cs ++ [if j < 0 then 255 else j] ++ drop (i + 1) cs
+    where j = f $ cs !! i
 
 -- Parse
--- (looping stack) -> stack to be executed -> ...
-parse :: [Command] -> [Command] -> CellState -> Int -> CellState
-parse _ [] cs _ = cs
-parse ls (x:xs) cs i
-  | x == MoveRight = parse (ls ++ [x]) xs cs (i + 1)
-  | x == MoveLeft = parse (ls ++ [x]) xs cs (i - 1)
-  | x == IncCell = parse (ls ++ [x]) xs (setCell (+1) cs i) i
-  | x == DecCell = parse (ls ++ [x]) xs (setCell (\j -> j - 1) cs i) i
-  | x == OpenBracket = parse [] xs cs i
-  | x == CloseBracket = if (cs !! (i - 1)) > 0
-                           then parse [] (ls ++ [x] ++ xs) cs i
-                           else parse [] xs cs i
-  | otherwise = parse ls xs cs i
+-- Saving all the states to debug
+parse :: [Command] -> [Command] -> CellState -> [Int] -> ([Command], [Command], CellState, [Int])
+parse ls [] cs i = (ls, [], cs, i)
+parse ls fx@(x:xs) cs i
+  | last i < 0 = error (show (ls, fx, cs, i))
+  | x == MoveRight = parse (ls ++ [x]) xs cs (i ++ [last i + 1])
+  | x == MoveLeft = parse (ls ++ [x]) xs cs (i ++ [last i - 1])
+  | x == IncCell = parse (ls ++ [x]) xs (setCell (+1) cs (last i)) (i ++ [last i])
+  | x == DecCell = parse (ls ++ [x]) xs (setCell (\j -> j - 1) cs (last i)) (i ++ [last i])
+  | x == OpenBracket = let (ls', xs', cs', i') = parse [] xs cs [last i]
+                        in parse (ls ++ [x] ++ ls') xs' cs' (i ++ i')
+  | x == CloseBracket = if (cs !! last i) > 0
+                           then parse [] (ls ++ [x] ++ xs) cs (i ++ [last i])
+                           else (ls ++ [x], xs, cs, i)
+  | otherwise = parse (ls ++ [x]) xs cs i
 
 
 main :: IO ()
-main = print $ parse [] (tokenize "+++++ [> +++++ < -]") initialCellState 1
+main = do
+    let (_, _, cs, _) = parse [] (tokenize "+++[>+++[>+<-]<-]") initialCellState [0]
+    print cs
