@@ -50,24 +50,22 @@ decCell = setCell (\x -> x - 1)
 -- doesn't bind itself to the parse process
 parse :: [Command] -> State MoveState [Command]
 parse [] = state (\x -> ([], x))
-parse (x:xs)
-    | x == CloseBracket = state(\(i, pc, cs) ->
-                                if cs !! i > 0
-                                   then runState (parse (pc ++ [x] ++ xs)) (i, [], cs)
-                                   else (xs, (i, pc ++ [x], cs)))
-    | otherwise = s >>= parse
-        where s = state(\v@(i, pc, cs) ->
-                    if i < 0 then error $ show v
-                    else
-                    case x of
-                        MoveRight    -> (xs, (i + 1, pc ++ [x], cs))
-                        MoveLeft     -> (xs, (i - 1, pc ++ [x], cs))
-                        IncCell      -> (xs, (i, pc ++ [x], incCell cs i))
-                        DecCell      -> (xs, (i, pc ++ [x], decCell cs i))
-                        OpenBracket  -> let (xs', (i', pc', cs')) = runState (parse xs) (i, [], cs)
-                                         in (xs', (i, pc ++ [x] ++ pc', cs'))
-                        _ -> (xs, v)
-                )
+parse (x:xs) = if x == CloseBracket then s else s >>= parse
+    where s = state(\v@(i, pc, cs) ->
+                if i < 0 then error $ show v
+                else
+                case x of
+                    MoveRight    -> (xs, (i + 1, pc ++ [x], cs))
+                    MoveLeft     -> (xs, (i - 1, pc ++ [x], cs))
+                    IncCell      -> (xs, (i, pc ++ [x], incCell cs i))
+                    DecCell      -> (xs, (i, pc ++ [x], decCell cs i))
+                    OpenBracket  -> let (xs', (i', pc', cs')) = runState (parse xs) (i, [], cs)
+                                     in (xs', (i, pc ++ [x] ++ pc', cs'))
+                    CloseBracket -> if cs !! i > 0
+                                    then runState (parse (pc ++ [x] ++ xs)) (i, [], cs)
+                                    else (xs, (i, pc ++ [x], cs))
+                    _ -> (xs, v)
+            )
 
 main :: IO ()
 main = do
