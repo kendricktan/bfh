@@ -3,9 +3,12 @@ module Main where
 
 import           Control.Monad.State.Lazy
 
-initialCellState = replicate 30 0
+initialCellState = replicate 30 (0 :: Int)
 
 type CellState = [Int]
+
+-- MoveState :: Int -> Parsed Commands -> CellState
+type MoveState = (Int, [Command], CellState)
 
 data Command = MoveRight
              | MoveLeft
@@ -36,25 +39,37 @@ setCell :: (Int -> Int) -> CellState -> Int -> CellState
 setCell f cs i = take i cs ++ [if j < 0 then 255 else j] ++ drop (i + 1) cs
     where j = f $ cs !! i
 
--- Parse
--- Saving all the states to debug
-parse :: [Command] -> [Command] -> CellState -> [Int] -> ([Command], [Command], CellState, [Int])
-parse ls [] cs i = (ls, [], cs, i)
-parse ls fx@(x:xs) cs i
-  | last i < 0 = error (show (ls, fx, cs, i))
-  | x == MoveRight = parse (ls ++ [x]) xs cs (i ++ [last i + 1])
-  | x == MoveLeft = parse (ls ++ [x]) xs cs (i ++ [last i - 1])
-  | x == IncCell = parse (ls ++ [x]) xs (setCell (+1) cs (last i)) (i ++ [last i])
-  | x == DecCell = parse (ls ++ [x]) xs (setCell (\j -> j - 1) cs (last i)) (i ++ [last i])
-  | x == OpenBracket = let (ls', xs', cs', i') = parse [] xs cs [last i]
-                        in parse (ls ++ [x] ++ ls') xs' cs' (i ++ i')
-  | x == CloseBracket = if (cs !! last i) > 0
-                           then parse [] (ls ++ [x] ++ xs) cs (i ++ [last i])
-                           else (ls ++ [x], xs, cs, i)
-  | otherwise = parse (ls ++ [x]) xs cs i
+incCell :: CellState -> Int -> CellState
+incCell = setCell (+1)
 
+decCell :: CellState -> Int -> CellState
+decCell = setCell (\x -> x - 1)
+
+-- Parse
+-- Close bracket is different from the others as it
+-- doesn't bind itself to the parse process
+parse :: [Command] -> State MoveState [Command]
+parse [] = state (\x -> ([], x))
+parse (x:xs)
+    | x == CloseBracket = state(\(i, pc, cs) ->
+                                if cs !! i > 0
+                                   then runState (parse (pc ++ [x] ++ xs)) (i, [], cs)
+                                   else (xs, (i, pc ++ [x], cs)))
+    | otherwise = s >>= parse
+        where s = state(\v@(i, pc, cs) ->
+                    if i < 0 then error $ show v
+                    else
+                    case x of
+                        MoveRight    -> (xs, (i + 1, pc ++ [x], cs))
+                        MoveLeft     -> (xs, (i - 1, pc ++ [x], cs))
+                        IncCell      -> (xs, (i, pc ++ [x], incCell cs i))
+                        DecCell      -> (xs, (i, pc ++ [x], decCell cs i))
+                        OpenBracket  -> let (xs', (i', pc', cs')) = runState (parse xs) (i, [], cs)
+                                         in (xs', (i, pc ++ [x] ++ pc', cs'))
+                        _ -> (xs, v)
+                )
 
 main :: IO ()
 main = do
-    let (_, _, cs, _) = parse [] (tokenize "+++[>+++[>+<-]<-]") initialCellState [0]
+    let (_, (_, _, cs)) = runState (parse $ tokenize "+++[>+++[>+<-]<-]") (0, [], initialCellState)
     print cs
