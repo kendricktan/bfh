@@ -2,6 +2,7 @@
 module Main where
 
 import           Control.Monad.State.Lazy
+import Data.Char
 
 initialCellState = replicate 30 (0 :: Int)
 
@@ -45,29 +46,32 @@ incCell = setCell (+1)
 decCell :: CellState -> Int -> CellState
 decCell = setCell (\x -> x - 1)
 
+
 -- Parse
 -- Close bracket is different from the others as it
 -- doesn't bind itself to the parse process
-parse :: [Command] -> State MoveState [Command]
-parse [] = state (\x -> ([], x))
+parse :: [Command] -> StateT MoveState IO [Command]
+parse [] = StateT (\x -> pure ([], x))
 parse (x:xs) = if x == CloseBracket then s else s >>= parse
-    where s = state(\v@(i, pc, cs) ->
+    where s = StateT (\v@(i, pc, cs) ->
                 if i < 0 then error $ show v
                 else
                 case x of
-                    MoveRight    -> (xs, (i + 1, pc ++ [x], cs))
-                    MoveLeft     -> (xs, (i - 1, pc ++ [x], cs))
-                    IncCell      -> (xs, (i, pc ++ [x], incCell cs i))
-                    DecCell      -> (xs, (i, pc ++ [x], decCell cs i))
-                    OpenBracket  -> let (xs', (i', pc', cs')) = runState (parse xs) (i, [], cs)
-                                     in (xs', (i, pc ++ [x] ++ pc', cs'))
+                    MoveRight    -> pure (xs, (i + 1, pc ++ [x], cs))
+                    MoveLeft     -> pure (xs, (i - 1, pc ++ [x], cs))
+                    IncCell      -> pure (xs, (i, pc ++ [x], incCell cs i))
+                    DecCell      -> pure (xs, (i, pc ++ [x], decCell cs i))
+                    OpenBracket  -> do (xs', (i', pc', cs')) <- liftIO $ runStateT (parse xs) (i, [], cs)
+                                       pure (xs', (i, pc ++ [x] ++ pc', cs'))
                     CloseBracket -> if cs !! i > 0
-                                    then runState (parse (pc ++ [x] ++ xs)) (i, [], cs)
-                                    else (xs, (i, pc ++ [x], cs))
-                    _ -> (xs, v)
+                                    then
+                                       do (xs', ms') <- liftIO $ runStateT (parse (pc ++ [x] ++ xs)) (i, [], cs)
+                                          pure (xs', ms')
+                                    else pure (xs, (i, pc ++ [x], cs))
+                    _ -> pure (xs, v)
             )
 
 main :: IO ()
 main = do
-    let (_, (_, _, cs)) = runState (parse $ tokenize "+++[>+++[>+<-]<-]") (0, [], initialCellState)
+    (_, (_, _, cs)) <- liftIO $ runStateT (parse $ tokenize "+++[>+++[>+<-]<-]") (0, [], initialCellState)
     print cs
