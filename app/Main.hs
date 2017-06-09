@@ -2,13 +2,14 @@
 module Main where
 
 import           Control.Monad.State.Lazy
-import Data.Char
+import           Data.Char
+import           System.Environment
 
-initialCellState = replicate 30 (0 :: Int)
+initialCellState = replicate 30000 (0 :: Int)
 
 type CellState = [Int]
 
--- MoveState :: Int -> Parsed Commands -> CellState
+-- MoveState :: Int (Position) -> Parsed Commands -> CellState
 type MoveState = (Int, [Command], CellState)
 
 data Command = MoveRight
@@ -68,10 +69,15 @@ parse (x:xs) = if x == CloseBracket then s else s >>= parse
                                        do (xs', ms') <- liftIO $ runStateT (parse (pc ++ [x] ++ xs)) (i, [], cs)
                                           pure (xs', ms')
                                     else pure (xs, (i, pc ++ [x], cs))
-                    _ -> pure (xs, v)
+                    InputCell    -> do c <- liftIO getChar
+                                       pure (xs, (i, pc ++ [x], setCell (const $ fromEnum c) cs i))
+                    PrintCell    -> do liftIO $ print (chr (cs !! i))
+                                       return (xs, (i, pc ++ [x], cs))
             )
 
 main :: IO ()
 main = do
-    (_, (_, _, cs)) <- liftIO $ runStateT (parse $ tokenize "+++[>+++[>+<-]<-]") (0, [], initialCellState)
-    print cs
+    (file : _) <- getArgs
+    s <- readFile file
+    (_, (_, _, cs)) <- runStateT (parse $ tokenize s) (0, [], initialCellState)
+    return ()

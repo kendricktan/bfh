@@ -1,7 +1,7 @@
 name:                bfh
 version:             0.1.0.0
--- synopsis:
--- description:
+synopsis:            Brainfuck, in Haskell
+description:         Brainfuck, using the StateT Monad
 homepage:            https://github.com/githubuser/bfh#readme
 license:             BSD3
 license-file:        LICENSE
